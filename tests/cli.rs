@@ -12,6 +12,42 @@ fn command(root: &Path) -> Command {
         .env("XDG_CACHE_HOME", root.join(".test-cache"));
     command
 }
+
+#[test]
+fn automatic_update_dry_run_renders_schedule_without_writing_configuration() {
+    let root = tempfile::tempdir().unwrap();
+    let team = option_env!("AGX_APPLE_TEAM_ID")
+        .filter(|s| !s.is_empty())
+        .unwrap_or("ABCDE12345");
+    let result = invoke(
+        root.path(),
+        &["update", "auto", "enable", "--dry-run", "--team-id", team],
+    );
+    assert_eq!(result["dry_run"], true);
+    assert_eq!(result["enabled"], false);
+    assert!(
+        result["plist"]
+            .as_str()
+            .unwrap()
+            .contains("<integer>86400</integer>")
+    );
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    let invalid = command(root.path())
+        .args([
+            "update",
+            "auto",
+            "enable",
+            "--dry-run",
+            "--team-id",
+            team,
+            "--interval-hours",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(invalid.stdout.is_empty());
+}
 fn invoke(root: &Path, args: &[&str]) -> Value {
     let output = command(root).args(args).output().unwrap();
     assert!(

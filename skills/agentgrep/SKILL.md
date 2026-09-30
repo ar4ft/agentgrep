@@ -42,3 +42,9 @@ Ranked searches refresh a user-local cache using current content hashes. `agx cl
 ## MCP
 
 The same operations are available through `agx_search`, `agx_read`, and `agx_map` when `agx mcp --root /absolute/project` is configured. The server fixes the root at startup; do not attempt paths outside it. Use CLI parsing for documents; the MCP server does not expose document writes.
+
+## Updates (0.2 and newer)
+
+Use `agx update check` when the user requests an update check. `agx update install` verifies a newer signed/notarized Mac release before replacement. `agx update auto enable` opts into daily launchd updates; enable it only when the user requests automatic updates. `agx update auto disable` stops them. `agx update rollback` restores the previous binary; disable automatic updates first if the user wants to keep that version.
+
+Stable releases are the default. Prereleases require `--prerelease`. Signed builds pin their Apple Team ID; source builds require an independently verified `--team-id` for installation/scheduling. Do not infer the trust identity from unverified update metadata, skip signature/notarization checks, or invoke sudo. Linux installation remains manual. Updates change the CLI binary, not already installed skill copies; rerun `agx skill` explicitly when the user requests skill upgrades. Search and MCP perform no update checks. See the repository signing/update guide for first-install requirements.

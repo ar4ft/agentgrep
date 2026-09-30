@@ -2,7 +2,24 @@
 
 Local source evidence for Codex, Claude Code, and other LLM agents. A native Rust binary with exact search, syntax context, ranked discovery, optional local embeddings, and MCP. macOS on Apple Silicon and Intel is the primary target; Linux is supported for development and CI.
 
-**Version 0.1: working foundation, not a benchmarked replacement for ripgrep.** No hosted inference calls, API keys, external `rg` executable, or model downloads are needed for text, symbol, or ranked search.
+**Version 0.2 development: signed-release and update support is implemented; Apple credentials are still required to publish it.** The published v0.1.0 remains unsigned. This is a working foundation, not a benchmarked replacement for ripgrep. No hosted inference calls, API keys, external `rg` executable, or model downloads are needed for text, symbol, or ranked search.
+
+## Signed releases and updates
+
+Normal CI/tag builds create unsigned development binaries. Only a manually started release workflow with `sign_and_notarize=true` signs Mac binaries, requires accepted Apple notarization, and produces DMGs with stapled tickets. Mac automatic updates verify the publisher identity and retain a rollback copy. Activation requires the one-time [Apple/GitHub credential setup](docs/signing-and-updates.md); it is not configured yet.
+
+After installing the first signed release:
+
+```sh
+agx update check
+agx update install
+agx update auto enable   # opt in to verified daily background updates
+agx update auto status
+agx update auto disable
+agx update rollback
+```
+
+See the [signing and updater guide](docs/signing-and-updates.md) for trust pins, source builds, channels, Command Line Tools, writable installation paths, and rollback behavior. Search and MCP do not check for updates.
 
 ## Install on Mac
 
@@ -184,6 +201,7 @@ agx clean .   # remove this root's cached source and vectors
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
+python3 -m unittest discover -s tests -p 'test_*.py'
 cargo build --release --locked
 python3 scripts/benchmark.py --binary target/release/agx
 python3 scripts/check_optional.py --binary target/release/agx

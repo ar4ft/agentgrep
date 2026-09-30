@@ -29,6 +29,7 @@
 
 ## Distribution
 
-- Signed/notarized Mac releases and a real Homebrew tap once a publishing repository exists.
+- v0.2 implements Developer ID signing/notarization, stapled DMGs, verified self-updates, rollback, and a daily opt-in LaunchAgent. Actual signed publication is pending Apple credentials; see [setup](signing-and-updates.md).
+- A real Homebrew tap remains future distribution work.
 - Versioned MCP/output contract fixtures and harness compatibility tests.
 - Keep default installation free of model downloads, remote provider accounts, and enforced harness tool replacement.

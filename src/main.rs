@@ -4,6 +4,7 @@ mod mcp;
 mod model;
 mod search;
 mod structure;
+mod update;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -112,6 +113,11 @@ enum Commands {
     Clean {
         #[arg(default_value = ".")]
         root: PathBuf,
+    },
+    /// Check, install, or roll back verified releases; configure macOS automatic updates.
+    Update {
+        #[command(subcommand)]
+        action: update::Action,
     },
 }
 
@@ -292,6 +298,7 @@ fn run() -> Result<()> {
             std::fs::remove_dir_all(&path)?;
             println!("{}", serde_json::json!({"removed":path}));
         }
+        Commands::Update { action } => println!("{}", update::run(action)?),
     }
     std::io::stdout().flush()?;
     Ok(())

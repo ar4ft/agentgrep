@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/publish_release.py"
 SPEC = importlib.util.spec_from_file_location("publish_release", SCRIPT)
@@ -13,6 +14,26 @@ SPEC.loader.exec_module(PUBLISH)
 
 
 class PublicationTests(unittest.TestCase):
+    def test_publication_writes_notes_and_uploads_before_marking_prerelease(self):
+        calls = []
+        def gh(arguments, allow_missing=False):
+            calls.append(arguments)
+            if arguments[0] == "api":
+                return None if allow_missing else json.dumps({"sha": "fixture-commit"})
+            if "--notes-file" in arguments:
+                body = Path(arguments[arguments.index("--notes-file") + 1]).read_text()
+                self.assertIn("Unsigned development prerelease", body)
+            return ""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.artifacts(root)
+            with patch("sys.argv", [str(SCRIPT), "--tag", "v0.2.0", "--out", str(root)]), patch.object(PUBLISH, "gh", side_effect=gh), patch.object(PUBLISH.subprocess, "check_output", return_value="fixture-commit\n"):
+                PUBLISH.main()
+        operations = [c[1] for c in calls if c[0] == "release"]
+        self.assertEqual(operations, ["create", "upload", "edit"])
+        self.assertIn("--prerelease=true", calls[-1])
+        self.assertIn("--latest=false", calls[-1])
+
     def test_signing_requires_manual_event_and_unsigned_does_not(self):
         for event in ("push", "pull_request", "schedule", ""):
             with self.assertRaisesRegex(RuntimeError, "manual"):

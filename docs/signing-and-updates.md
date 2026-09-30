@@ -1,6 +1,6 @@
 # Signed releases and automatic updates
 
-The v0.2 development branch includes Developer ID signing, Apple notarization, stapled disk images, verified updates, rollback, and an opt-in macOS LaunchAgent. The published v0.1.0 release remains unsigned. **Apple credentials are not set up yet, so a signed v0.2.0 release has not been published.**
+The v0.2 development branch includes Developer ID signing, Apple notarization, stapled disk images, verified updates, rollback, and an opt-in macOS LaunchAgent. The published v0.1.0 release remains unsigned. **Apple credentials are not set up yet, so a signed v0.2.1 release has not been published.**
 
 ## One-time Apple setup
 
@@ -30,10 +30,10 @@ Paste it directly into the GitHub secret form. Store the `.p12`, password, and `
 Tag pushes and normal CI never sign: they produce unsigned development binaries without Apple secrets. After the six secrets are configured, create a reviewed version tag, then explicitly run signing by hand:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0  # unsigned development prerelease
+git tag v0.2.1
+git push origin v0.2.1  # unsigned development prerelease
 gh workflow run release.yml --ref main \
-  -f release_tag=v0.2.0 -f sign_and_notarize=true
+  -f release_tag=v0.2.1 -f sign_and_notarize=true
 ```
 
 Alternatively, open GitHub Actions → release → Run workflow, enter the existing version tag, and enable **sign_and_notarize**. The checkbox defaults to false; a manual unsigned build is also supported. Signing is allowed only for a manual `workflow_dispatch` with that option explicitly true. No tag push, scheduled job, or PR can enable it.
@@ -51,7 +51,7 @@ For each Mac architecture, the **manual signing run**:
 5. Staples the notarization ticket to the DMG, validates it, and runs Gatekeeper assessment.
 6. Packages the signed binary with matching notarization metadata. Publishes both Mac DMGs, compatibility tar archives, Linux/source archives, reports, and checksums only after every platform succeeds.
 
-Unsigned development runs always publish prereleases, even for a tag like `v0.2.0`. A successful manual signed run can promote that same immutable tag from unsigned development to signed production. Signed semantic prerelease tags remain prereleases. Published signed releases cannot be overwritten by either mode; later updates need new tags. Signed runs have no unsigned fallback. Credentials are not printed, imported keychains are deleted, and temporary key files are removed. Fork/PR validation does not receive signing secrets.
+Unsigned development runs always publish prereleases, even for a tag like `v0.2.1`. A successful manual signed run can promote that same immutable tag from unsigned development to signed production. Signed semantic prerelease tags remain prereleases. Published signed releases cannot be overwritten by either mode; later updates need new tags. Signed runs have no unsigned fallback. Credentials are not printed, imported keychains are deleted, and temporary key files are removed. Fork/PR validation does not receive signing secrets.
 
 A standalone command-line executable cannot carry a stapled ticket, and tar archives cannot be stapled. **The DMG is the offline notarized delivery format.** Compatibility tar archives contain the signed executable but do not provide the stapled delivery ticket. Prefer the DMG for initial installation and updates.
 
@@ -61,7 +61,7 @@ Download the architecture-specific DMG from [GitHub releases](https://github.com
 
 ```sh
 mkdir -p ~/.local/bin
-install -m 755 /Volumes/agentgrep-0.2.0/agx ~/.local/bin/agx
+install -m 755 /Volumes/agentgrep-0.2.1/agx ~/.local/bin/agx
 ~/.local/bin/agx doctor
 ```
 

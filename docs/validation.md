@@ -32,7 +32,7 @@ Evaluate actual harness sessions, real embedding models, heterogeneous repositor
 
 ## v0.2.0 signing and updater validation
 
-Local Linux checks passed: formatting, Clippy with warnings denied, 7 Rust unit tests, 15 integration tests, 10 Python signing/publication tests, and an optimized release build. Optional Ollama fixture and real LiteParse PDF checks passed again. An actual GitHub update check passed using platform certificate verification.
+Local Linux checks passed: formatting, Clippy with warnings denied, 7 Rust unit tests, 15 integration tests, 11 Python signing/publication tests, and an optimized release build. Optional Ollama fixture and real LiteParse PDF checks passed again. An actual GitHub update check passed using platform certificate verification.
 
 Signing tests mock Apple services; they verify hardened-runtime signing arguments, notarization rejection, ticket stapling, temporary-keychain cleanup, and manual-only publication policy. They do not prove Apple notarization. Mac CI additionally checks that real codesign rejects an unsigned executable. Actual Developer ID signing, Apple notarization, Gatekeeper acceptance, and a complete signed update require Apple credentials, which are not configured yet.
 

@@ -100,7 +100,7 @@ def main():
         plan = publication_plan(existing, args.signed, args.tag)
         notes = Path(f"docs/releases/{args.tag}.md").read_text()
         mode = "Developer ID signed and Apple notarized Mac release." if args.signed else "**Unsigned development prerelease.** Apple signing/notarization was not requested. Automatic updates reject these unsigned artifacts."
-        with tempfile.NamedTempFile(mode="w", suffix=".md") as body:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md") as body:
             body.write(mode + "\n\n" + notes)
             body.flush()
             if plan["create_draft"]:

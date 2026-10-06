@@ -1,0 +1,122 @@
+{
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "python": "3.14.7",
+    "agx": "agx 0.3.0"
+  },
+  "corpus": {
+    "files": 1000,
+    "lines_per_file": 60,
+    "language": "python",
+    "total_bytes": 1687800
+  },
+  "measurements": {
+    "worker_start_initialize": {
+      "ms": 7.209
+    },
+    "worker_index_cold": {
+      "ms": 411.114,
+      "files_read": 1000,
+      "files_reused": 0,
+      "files_indexed": 1000,
+      "incomplete": false,
+      "memory_accounted_bytes": 113613273
+    },
+    "worker_text_warm": {
+      "median_ms": 3.83,
+      "min_ms": 3.583,
+      "max_ms": 3.919,
+      "stdout_bytes": 5542,
+      "runs": 5,
+      "matched_units": 2000,
+      "returned_units": 8,
+      "incomplete": false
+    },
+    "cli_text_first": {
+      "ms": 39.313,
+      "stdout_bytes": 2563
+    },
+    "cli_text_warm": {
+      "median_ms": 35.007,
+      "min_ms": 28.402,
+      "max_ms": 45.888,
+      "stdout_bytes": 2563,
+      "runs": 5
+    },
+    "worker_symbol_warm": {
+      "median_ms": 3.92,
+      "min_ms": 3.698,
+      "max_ms": 4.279,
+      "stdout_bytes": 5475,
+      "runs": 5,
+      "matched_units": 1000,
+      "returned_units": 8,
+      "incomplete": false
+    },
+    "cli_symbol_first": {
+      "ms": 35.799,
+      "stdout_bytes": 2488
+    },
+    "cli_symbol_warm": {
+      "median_ms": 47.897,
+      "min_ms": 46.562,
+      "max_ms": 58.092,
+      "stdout_bytes": 2488,
+      "runs": 5
+    },
+    "worker_ranked_warm": {
+      "median_ms": 5.162,
+      "min_ms": 5.06,
+      "max_ms": 5.897,
+      "stdout_bytes": 5561,
+      "runs": 5,
+      "matched_units": 1000,
+      "returned_units": 8,
+      "incomplete": false
+    },
+    "cli_ranked_first": {
+      "ms": 2393.053,
+      "stdout_bytes": 2574
+    },
+    "cli_ranked_warm": {
+      "median_ms": 154.878,
+      "min_ms": 136.588,
+      "max_ms": 183.012,
+      "stdout_bytes": 2574,
+      "runs": 5
+    },
+    "worker_metadata_refresh": {
+      "ms": 46.565,
+      "files_read": 0,
+      "files_reused": 1000
+    },
+    "worker_one_file_update": {
+      "ms": 0.524,
+      "files_read": 1,
+      "files_reused": 0
+    }
+  },
+  "worker_limits": {
+    "max_file_bytes": 262144,
+    "max_files": 10000,
+    "memory_bytes": 268435456,
+    "queue_bytes": 8388608,
+    "queue_requests": 32,
+    "request_bytes": 4194304,
+    "response_bytes": 2097152,
+    "result_limit": 1000,
+    "source_budget_bytes": 1000000
+  },
+  "worker_observed_rss_kib": 55792,
+  "limitations": [
+    "Synthetic Python corpus; not a task-success, semantic-recall, or real-project study.",
+    "First/cold means a new process/index; filesystem pages may already be cached by corpus creation.",
+    "CLI timings include startup; warm worker queries exclude startup and initial indexing.",
+    "CLI schema 1 and worker schema 2 have different metadata and BM25 tie/scope behavior; output byte counts are not equivalent workloads.",
+    "Warm worker queries scan cached documents/chunks; there is no inverted-postings candidate index.",
+    "The worker does no query-time disk freshness check: the editor must report events, or request refresh/rescan.",
+    "Cache accounting is conservative, not an RSS cap; transient parsing, protocol queues, and allocator/runtime overhead are additional.",
+    "No inference services or embedding models were used."
+  ]
+}

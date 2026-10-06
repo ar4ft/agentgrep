@@ -21,3 +21,14 @@ Corpus: 1,000 generated Python files, 60 lines per file, 1,687,800 source bytes.
 These are synthetic measurements, not equivalent-results speed guarantees, Mac performance, nain GUI responsiveness, or task-success/recall evaluations. Corpus generation may warm filesystem pages: “cold” means a new worker/cache, not a flushed OS cache. CLI schema 1 and worker schema 2 differ in metadata and filtered BM25 statistics/tie behavior; serialized byte sizes differ. Warm worker queries exclude initial indexing and do no freshness I/O, whereas CLI queries verify current files. The worker relies on editor file events/rescans to achieve freshness.
 
 Remaining limits: linear cached scans, no global candidate postings, reparsing a changed document rather than incremental tree edits, synchronous ordered state operations, best-effort cancellation around bounded noninterruptible calls, no internal watcher, conservative admission that may omit a large corpus at defaults, and no hard OS RSS ceiling. Retained syntax duplicates some source. For real repositories, measure complete indexing, latency distributions, peak memory and sustained edits before increasing limits or claiming interactive scalability.
+
+## Native Mac validation
+
+[Native CI run 37493947952](https://github.com/ar4ft/agentgrep/actions/runs/37493947952) passed Linux, Apple Silicon and Intel validation at source commit `5a5618f71ec4d31a38e05441ce45c8fba2d9a898`. Each Mac job passed 24 Rust tests and 26 Python tests, release build, optional-adapter fixtures, normal Cargo installation, the native Rust editor adapter example, and the 1,000-file benchmark. Downloaded Mac executable headers were checked for their native CPU architecture. These checks do not validate nain GUI integration.
+
+| Native platform | Cold index (ms) | Warm text (ms) | Warm symbol (ms) | Warm ranked (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Apple Silicon | 411.114 | 3.830 | 3.920 | 5.162 |
+| Intel Mac | 589.414 | 4.824 | 6.477 | 10.342 |
+
+Raw native reports: [Apple Silicon](benchmarks/editor-macos-arm64.json) and [Intel Mac](benchmarks/editor-macos-x86_64.json). Both indexed all 1,000 files without incomplete results, reused 1,000 sources with zero reads on unchanged refresh, and reread exactly one source for the one-file update. Both used the same 256 MiB cache allowance and five warm-query samples; these hosted runner measurements are not representative Mac desktop latency distributions.

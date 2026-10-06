@@ -78,3 +78,5 @@ The worker does not change agx's standalone inference-capable tools. Restriction
 ## Validation before a nain release
 
 Agentgrep CI runs the real worker/CLI tests, adapter example checks, release build and cold/warm benchmark on native Apple Silicon (`macos-15`), Intel (`macos-15-intel`) and Linux. It does not establish nain GUI behavior. After the separate native nain change, test dock placement/button separation, keyboard/focus behavior, exact source opening, GUI PATH discovery, unsaved edits, save races, ignored files, multi-root identity, worker crash/restart and workspace closure on both Mac architectures. Audit the native production dependency tree and confirm no AI or telemetry calls are introduced.
+
+Notebook/cell and virtual-document mapping is not implemented. Initial native provider scope should be ordinary local text files. An `.ipynb` file is currently searched as raw JSON/text, so its file-line ranges cannot be treated as notebook cell locations. Exclude notebooks from the panel until nain adds an explicit cell-to-source mapping; preserve nain's existing notebook search.

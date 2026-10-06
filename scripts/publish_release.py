@@ -37,6 +37,8 @@ def prepare_checksums(output):
 
 
 def validate_artifacts(output, version, signed):
+    if not (output / "install.sh").is_file():
+        raise RuntimeError("The GitHub-hosted installer must be uploaded with every release")
     for target in TARGETS:
         archive = output / f"agx-{version}-{target}.tar.gz"
         if not archive.is_file():

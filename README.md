@@ -31,7 +31,22 @@ See the [signing and updater guide](docs/signing-and-updates.md) for trust pins,
 
 ## Install on Mac
 
-Install Rust and Apple's command-line tools if they are not already available:
+Install the prebuilt `agx` into `~/.agx/bin` without Rust or sudo:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ar4ft/agentgrep/main/scripts/install.sh | sh
+```
+
+This selects the newest published release, including unsigned development prereleases,
+verifies the archive checksum, and configures your shell PATH. Open a new terminal
+or run `. "$HOME/.agx/env"`. Rerun the command to upgrade. Use `--stable` to require
+a production release (none is available until Apple setup is complete).
+See [installer options and trust guarantees](docs/installation.md) for pinned versions,
+custom directories, GUI editor paths, and `--no-modify-path`. The script is also
+uploaded automatically as a release asset; it does not enable automatic updates
+or configure models/agent harnesses.
+
+For a source build, install Rust and Apple's command-line tools if needed:
 
 ```sh
 xcode-select --install

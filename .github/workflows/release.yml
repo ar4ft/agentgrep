@@ -95,6 +95,7 @@ jobs:
           merge-multiple: true
       - name: Add source and checksums
         run: |
+          cp scripts/install.sh dist/install.sh
           git archive --format=tar --prefix="agentgrep-${RELEASE_TAG#v}/" HEAD | gzip -n > "dist/agentgrep-${RELEASE_TAG#v}-source.tar.gz"
           git archive --format=zip --prefix="agentgrep-${RELEASE_TAG#v}/" HEAD > "dist/agentgrep-${RELEASE_TAG#v}-source.zip"
           python3 scripts/publish_release.py --tag "$RELEASE_TAG" --out dist --prepare-only
@@ -107,3 +108,24 @@ jobs:
           else
             python3 scripts/publish_release.py --tag "$RELEASE_TAG" --out dist
           fi
+  verify-install:
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install the published native binary through the public release script
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/ar4ft/agentgrep/releases/download/$RELEASE_TAG/install.sh" |
+            sh -s -- --version "${RELEASE_TAG#v}" --prefix "$RUNNER_TEMP/agx-download" --no-modify-path
+          test "$("$RUNNER_TEMP/agx-download/bin/agx" --version)" = "agx ${RELEASE_TAG#v}"
+          mkdir "$RUNNER_TEMP/agx-installer-project"
+          printf 'fn installer_probe() { println!("ready"); }\n' > "$RUNNER_TEMP/agx-installer-project/probe.rs"
+          for mode in text symbol ranked; do
+            "$RUNNER_TEMP/agx-download/bin/agx" search installer_probe "$RUNNER_TEMP/agx-installer-project" --mode "$mode" > "$RUNNER_TEMP/search-$mode.json"
+            python3 -c 'import json,sys; result=json.load(open(sys.argv[1])); assert result["results"], result' "$RUNNER_TEMP/search-$mode.json"
+          done

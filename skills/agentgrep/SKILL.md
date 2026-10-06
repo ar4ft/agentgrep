@@ -5,7 +5,7 @@ description: Find verifiable local code and document evidence with agx. Use for 
 
 # Agentgrep
 
-Run `agx --version` to check availability. If unavailable, follow the repository README installation instructions or use the harness's existing search tools. Do not silently install software or download models.
+Run `agx --version` to check availability. If unavailable, follow the repository README installation instructions or use the harness's existing search tools. The GitHub installer places it in `~/.agx/bin/agx`; GUI harnesses may need this absolute path. Do not silently install software or download models.
 
 ## Choose the smallest useful search
 

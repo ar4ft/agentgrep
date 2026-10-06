@@ -15,9 +15,9 @@ agx search 'session token' /path/to/project --mode ranked
 agx serve --stdio --restricted
 ```
 
-Cargo installs `agx` into `~/.cargo/bin` by default. GUI applications may have a different PATH from the terminal. The future native adapter should expose an optional setting such as `code_search.agx_path` containing an **absolute executable path**. That setting is a proposed nain interface, not an existing setting. An invalid explicit path should fail visibly, never silently select another executable.
+The [GitHub-hosted installer](installation.md) installs `agx` into `~/.agx/bin`; Cargo installs it into `~/.cargo/bin` by default. GUI applications may have a different PATH from the terminal. The future native adapter should expose an optional setting such as `code_search.agx_path` containing an **absolute executable path**. That setting is a proposed nain interface, not an existing setting. An invalid explicit path should fail visibly, never silently select another executable.
 
-Discovery order: explicit path, inherited PATH, `~/.cargo/bin/agx`, `~/.local/bin/agx`, `/opt/homebrew/bin/agx`, `/usr/local/bin/agx`. Check that the candidate is an executable file; canonicalize it. Do not download binaries, invoke a shell, install a model, run `doctor` (which probes optional dependencies), install an agent skill, configure MCP, or trigger `agx update` from the nain adapter. Installation and tool updates remain explicit user actions.
+Discovery order: explicit path, inherited PATH, `~/.agx/bin/agx`, `~/.cargo/bin/agx`, `~/.local/bin/agx`, `/opt/homebrew/bin/agx`, `/usr/local/bin/agx`. Check that the candidate is an executable file; canonicalize it. Do not download binaries, invoke a shell, install a model, run `doctor` (which probes optional dependencies), install an agent skill, configure MCP, or trigger `agx update` from the nain adapter. Installation and tool updates remain explicit user actions.
 
 A compiled, framework-independent Rust subprocess example is provided in [`examples/nain_adapter.rs`](../examples/nain_adapter.rs):
 

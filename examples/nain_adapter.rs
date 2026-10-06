@@ -69,6 +69,7 @@ fn locate(explicit: Option<&Path>) -> Result<PathBuf> {
         .unwrap_or_default();
     if let Some(base) = directories::BaseDirs::new() {
         candidates.extend([
+            base.home_dir().join(".agx/bin/agx"),
             base.home_dir().join(".cargo/bin/agx"),
             base.home_dir().join(".local/bin/agx"),
         ]);

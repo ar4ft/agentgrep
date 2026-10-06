@@ -65,6 +65,7 @@ class PublicationTests(unittest.TestCase):
             PUBLISH.publication_plan(draft, False, "v0.2.0")
 
     def artifacts(self, root):
+        (root / "install.sh").write_bytes(b"fixture-installer")
         for target in PUBLISH.TARGETS:
             (root / f"agx-0.2.0-{target}.tar.gz").write_bytes(b"fixture-archive")
         for extension in ("tar.gz", "zip"):
@@ -89,6 +90,17 @@ class PublicationTests(unittest.TestCase):
             image.write_bytes(b"corrupted")
             with self.assertRaisesRegex(RuntimeError, "checksum mismatch"):
                 PUBLISH.validate_artifacts(root, "0.2.0", True)
+
+    def test_installer_is_required_and_included_in_aggregate_checksums(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.artifacts(root)
+            PUBLISH.prepare_checksums(root)
+            checksum = hashlib.sha256((root / "install.sh").read_bytes()).hexdigest()
+            self.assertIn(f"{checksum}  install.sh\n", (root / "SHA256SUMS").read_text())
+            (root / "install.sh").unlink()
+            with self.assertRaisesRegex(RuntimeError, "installer"):
+                PUBLISH.validate_artifacts(root, "0.2.0", False)
 
 
 if __name__ == "__main__":

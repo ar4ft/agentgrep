@@ -2,7 +2,15 @@
 
 Local source evidence for Codex, Claude Code, and other LLM agents. A native Rust binary with exact search, syntax context, ranked discovery, optional local embeddings, and MCP. macOS on Apple Silicon and Intel is the primary target; Linux is supported for development and CI.
 
-**Version 0.2 development: signed-release and update support is implemented; Apple credentials are still required to publish it.** The published v0.1.0 remains unsigned. This is a working foundation, not a benchmarked replacement for ripgrep. No hosted inference calls, API keys, external `rg` executable, or model downloads are needed for text, symbol, or ranked search.
+**Version 0.3: restricted local editor worker and nain integration contract.** Releases remain unsigned development prereleases until Apple signing credentials are configured. This is a working foundation, not a benchmarked replacement for ripgrep. No hosted inference calls, API keys, external `rg` executable, or model downloads are needed for text, symbol, or ranked search.
+
+## Local editor integration (nain)
+
+Install the existing executable with `cargo install --path . --locked`. The JSON CLI remains available as `agx search QUERY ROOT --mode text|symbol|ranked`. These modes do not invoke models; `--model` is rejected outside standalone hybrid search.
+
+`agx serve --stdio --restricted` adds a persistent, local editor worker with cached syntax/BM25 data, incremental file updates, unsaved document versions, cancellation, indexing progress, bounded search responses, and explicit incomplete results. The worker exposes only Text, Symbol, and Ranked; BM25 is lexical ranking, not model inference. Standalone agent, hybrid, MCP, parsing, and update capabilities remain available separately.
+
+See the [CLI JSON contract](docs/cli-json.md), [worker protocol v1](docs/editor-protocol.md), and [nain integration guide](docs/nain-integration.md). The guide describes executable discovery, the optional Rust subprocess example, and the native Code Search panel/provider interface nain must add. **Current nain has no custom sidebar/search-provider extension API: installing agx or an adapter does not create a panel.** No nain code is changed here.
 
 ## Signed releases and updates
 
@@ -174,7 +182,8 @@ Use an absolute executable path: GUI and harness subprocesses may have a differe
   "returned_units": 1,
   "truncated": false,
   "budget_bytes": 16000,
-  "warnings": []
+  "warnings": [],
+  "incomplete": false
 }
 ```
 
@@ -186,9 +195,9 @@ Successful searches—including zero results—exit `0`. Execution/validation fa
 
 ## Index and privacy
 
-Text/symbol queries read current files without a persistent index. Ranked/hybrid queries refresh a JSON cache in the OS user-cache location (`~/Library/Caches/...` on Mac, `$XDG_CACHE_HOME/...` or `~/.cache/...` on Linux). Cached source is plaintext; files are created owner-only on Unix and each root's cache directory is mode `0700`.
+Standalone CLI text/symbol queries read current files without a persistent index. Ranked/hybrid queries refresh a JSON cache in the OS user-cache location (`~/Library/Caches/...` on Mac, `$XDG_CACHE_HOME/...` or `~/.cache/...` on Linux). Cached source is plaintext; files are created owner-only on Unix and each root's cache directory is mode `0700`.
 
-Every refresh walks and hashes current eligible content, reusing unchanged syntax chunks and removing deleted/newly ignored files. **This remains a full corpus read per query**, not sublinear retrieval or a watcher daemon. It trades startup simplicity and freshness for large-corpus throughput. Ignored files are outside the evidence scope; unreadable-file/traversal warnings mean the snapshot may be incomplete. Concurrent file changes are not an atomic filesystem snapshot.
+Every refresh walks and hashes current eligible content, reusing unchanged syntax chunks and removing deleted/newly ignored files. **Standalone CLI ranked/hybrid remain a full corpus read per query**, not sublinear retrieval or a watcher daemon. It trades startup simplicity and freshness for large-corpus throughput. Ignored files are outside the evidence scope; unreadable-file/traversal warnings mean the snapshot may be incomplete. Concurrent file changes are not an atomic filesystem snapshot.
 
 ```sh
 agx index .   # warm syntax/ranked cache

@@ -50,10 +50,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked
+      - run: cargo test --all-targets --locked
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: cargo build --release --locked
       - run: python3 scripts/check_optional.py --binary target/release/agx
+      - name: Benchmark cold and warm editor search
+        run: python3 scripts/benchmark_worker.py --binary target/release/agx --files 1000 --out "dist/editor-benchmark-${{ matrix.os }}.json"
       - name: Sign, notarize, and staple macOS image
         if: runner.os == 'macOS' && github.event_name == 'workflow_dispatch' && inputs.sign_and_notarize
         env:

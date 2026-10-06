@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", default="target/release/agx")
     parser.add_argument("--out", default="dist")
-    parser.add_argument("--version", default="0.2.1")
+    parser.add_argument("--version", default="0.3.0")
     parser.add_argument("--macos-signing-report", type=Path)
     parser.add_argument("--require-apple-signing", action="store_true")
     args = parser.parse_args()
@@ -60,6 +60,10 @@ def main():
             (repository / "skills/agentgrep/SKILL.md", "skills/agentgrep/SKILL.md"),
             (repository / "docs/validation.md", "docs/validation.md"),
             (repository / "docs/signing-and-updates.md", "docs/signing-and-updates.md"),
+            (repository / "docs/cli-json.md", "docs/cli-json.md"),
+            (repository / "docs/editor-protocol.md", "docs/editor-protocol.md"),
+            (repository / "docs/nain-integration.md", "docs/nain-integration.md"),
+            (repository / "examples/nain_adapter.rs", "examples/nain_adapter.rs"),
         ]:
             info = tar.gettarinfo(str(source), arcname=f"{name}/{destination}")
             info.mode = 0o755 if destination == "agx" else 0o644

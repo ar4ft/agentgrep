@@ -39,7 +39,7 @@ impl Default for SearchOptions {
     }
 }
 
-pub fn search(root: &Path, options: &SearchOptions) -> Result<Response> {
+pub fn validate(options: &SearchOptions) -> Result<()> {
     anyhow::ensure!(!options.query.trim().is_empty(), "Query cannot be empty");
     anyhow::ensure!(
         options.limit > 0 && options.limit <= 1000,
@@ -50,6 +50,15 @@ pub fn search(root: &Path, options: &SearchOptions) -> Result<Response> {
         "budget_bytes must be between 1 and 1000000"
     );
     anyhow::ensure!(options.context <= 100, "context must be at most 100");
+    anyhow::ensure!(
+        options.mode == "hybrid" || options.model.is_none(),
+        "model is only allowed in standalone hybrid mode"
+    );
+    Ok(())
+}
+
+pub fn search(root: &Path, options: &SearchOptions) -> Result<Response> {
+    validate(options)?;
     if matches!(options.mode.as_str(), "ranked" | "hybrid") {
         return crate::index::ranked(root, options);
     }

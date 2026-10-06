@@ -5,6 +5,7 @@ mod model;
 mod search;
 mod structure;
 mod update;
+mod worker;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -37,6 +38,14 @@ enum Harness {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Run the local editor worker (text, symbol, lexical BM25 only).
+    Serve {
+        #[arg(long, required = true)]
+        stdio: bool,
+        /// Explicitly select the editor-only capability surface (also the default).
+        #[arg(long)]
+        restricted: bool,
+    },
     /// Find source evidence. JSON is the default output.
     Search {
         query: String,
@@ -183,6 +192,7 @@ fn parse_document(input: PathBuf, out: PathBuf) -> Result<()> {
 
 fn run() -> Result<()> {
     match Cli::parse().command {
+        Commands::Serve { .. } => worker::serve()?,
         Commands::Search {
             query,
             root,

@@ -54,3 +54,9 @@ Skill installation preflights both destinations and preserves custom skills unle
 ## Documents
 
 The adapter invokes LiteParse with structured subprocess arguments, preserving paths with spaces and preventing shell interpretation. It extracts to a temporary Markdown file, requires successful nonempty output, then persists without clobbering. Progress goes to stderr and a provenance summary goes to stdout. Markdown citations refer to extraction lines. It does not yet retain page/bounding-box evidence, extraction hashes, or a queryable provenance sidecar.
+
+## Local editor worker
+
+`agx serve --stdio --restricted` is a separate, always-restricted protocol, with an actor-owned in-memory document cache and a bounded input/cancellation thread. It calls pure term extraction rather than ranked/hybrid entry points. Source declarations and chunk term frequencies are reused; per-root document frequencies and length statistics change only when documents change. Queries read cached evidence, not filesystem contents. The host editor owns change events and freshness reconciliation. Unsaved full-content overlays, monotonic versions, session IDs and index fences enable rejecting stale UI results.
+
+The worker has a distinct versioned result schema and serialized search-response limit; CLI schema 1 gains only the optional additive `incomplete` field. See the protocol for limits, cancellation, ignore scope differences and memory-accounting limitations. It remains a linear cached scan without a global postings index or internal watcher. Neither the worker nor the three lexical CLI modes perform inference or telemetry.

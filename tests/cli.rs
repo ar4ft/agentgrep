@@ -385,10 +385,10 @@ fn symlink_outside_root_is_not_searched_or_read() {
     let outside = tempfile::tempdir().unwrap();
     write(outside.path(), "secret", "needle");
     std::os::unix::fs::symlink(outside.path().join("secret"), root.path().join("link")).unwrap();
-    assert_eq!(
-        invoke(root.path(), &["search", "needle"])["matched_units"],
-        0
-    );
+    let result = invoke(root.path(), &["search", "needle"]);
+    assert_eq!(result["matched_units"], 0);
+    assert_eq!(result["incomplete"], true);
+    assert!(result["warnings"][0].as_str().unwrap().contains("2 MiB"));
     assert!(
         !command(root.path())
             .args(["read", "link"])

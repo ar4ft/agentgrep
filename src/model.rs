@@ -31,6 +31,8 @@ pub struct Response {
     pub truncated: bool,
     pub budget_bytes: usize,
     pub warnings: Vec<String>,
+    /// Eligible source could not be inspected; distinct from result clipping.
+    pub incomplete: bool,
 }
 
 // The budget bounds source UTF-8 bytes, not model-specific tokens or JSON overhead.
@@ -73,6 +75,9 @@ pub fn bounded_response(
     }
     let returned_units = results.len();
     let truncated = returned_units < matched_units || results.iter().any(|h| h.excerpt_truncated);
+    let incomplete = warnings
+        .iter()
+        .any(|w| !w.starts_with("Index cache invalid;"));
     Response {
         schema_version: 1,
         root: root.display().to_string(),
@@ -84,5 +89,6 @@ pub fn bounded_response(
         truncated,
         budget_bytes: budget,
         warnings,
+        incomplete,
     }
 }

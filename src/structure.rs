@@ -2,6 +2,79 @@ use crate::{corpus::Source, model::Chunk};
 use std::path::Path;
 use tree_sitter::{Language, Node, Parser};
 
+/// Worker-only bounded parse. Standalone CLI keeps its existing declaration behavior.
+pub fn bounded_symbols(
+    source: &Source,
+    cancel: &std::sync::atomic::AtomicBool,
+    byte_limit: usize,
+) -> anyhow::Result<(Vec<Chunk>, bool)> {
+    use std::sync::atomic::Ordering;
+    let Some(language) = language(&source.path) else {
+        return Ok((vec![], false));
+    };
+    let mut parser = Parser::new();
+    parser.set_language(&language)?;
+    let mut progress = |_: &tree_sitter::ParseState| cancel.load(Ordering::Relaxed);
+    let bytes = source.content.as_bytes();
+    let tree = parser
+        .parse_with_options(
+            &mut |offset, _| &bytes[offset..],
+            None,
+            Some(tree_sitter::ParseOptions::new().progress_callback(&mut progress)),
+        )
+        .ok_or_else(|| anyhow::anyhow!("cancelled"))?;
+    let lines: Vec<_> = source.content.lines().collect();
+    let mut output = Vec::new();
+    let mut used = 0;
+    let mut clipped = false;
+    // Iterative walk avoids recursion on adversarially deep syntax.
+    let mut cursor = tree.walk();
+    loop {
+        anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
+        let node = cursor.node();
+        if declaration(node.kind()) {
+            let start = node.start_position().row + 1;
+            let end =
+                (node.end_position().row + usize::from(node.end_position().column > 0)).max(start);
+            let size = lines
+                .iter()
+                .skip(start - 1)
+                .take(end - start + 1)
+                .map(|l| l.len() + 1)
+                .sum::<usize>();
+            if output.len() >= 256 || used + size > byte_limit {
+                clipped = true;
+            } else {
+                used += size;
+                let symbol = node
+                    .child_by_field_name("name")
+                    .or_else(|| node.child_by_field_name("type"))
+                    .and_then(|n| n.utf8_text(bytes).ok())
+                    .map(str::to_owned);
+                output.push(Chunk {
+                    path: source.path.clone(),
+                    start_line: start,
+                    end_line: end,
+                    symbol,
+                    kind: node.kind().into(),
+                    content: lines[start - 1..end].join("\n"),
+                });
+            }
+        }
+        if cursor.goto_first_child() {
+            continue;
+        }
+        loop {
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            if !cursor.goto_parent() {
+                return Ok((output, clipped));
+            }
+        }
+    }
+}
+
 fn language(path: &str) -> Option<Language> {
     Some(match Path::new(path).extension()?.to_str()? {
         "rs" => tree_sitter_rust::LANGUAGE.into(),

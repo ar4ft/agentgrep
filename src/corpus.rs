@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use globset::{GlobBuilder, GlobSetBuilder};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
@@ -91,8 +92,7 @@ pub fn files(root: &Path, globs: &[String], hidden: bool) -> Result<(Vec<PathBuf
     walker
         .hidden(!hidden)
         .follow_links(false)
-        .require_git(false)
-        .max_filesize(Some(MAX_FILE_BYTES));
+        .require_git(false);
     // These are always excluded, even when ignored files/hidden files are requested.
     walker.filter_entry(|entry| {
         let n = entry.file_name().to_string_lossy();
@@ -118,6 +118,13 @@ pub fn files(root: &Path, globs: &[String], hidden: bool) -> Result<(Vec<PathBuf
                 }
                 let relative = entry.path().strip_prefix(root)?;
                 if (!has_includes || includes.is_match(relative)) && !excludes.is_match(relative) {
+                    if entry.metadata().is_ok_and(|m| m.len() > MAX_FILE_BYTES) {
+                        warnings.push(format!(
+                            "Skipped {}: file exceeds 2 MiB",
+                            relative.display()
+                        ));
+                        continue;
+                    }
                     paths.push(entry.into_path());
                 }
             }
@@ -140,11 +147,17 @@ pub fn load(root: &Path, globs: &[String], hidden: bool) -> Result<(Vec<Source>,
                 "Source path escaped root: {}",
                 path.display()
             );
-            let bytes =
-                std::fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?;
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)
+                .with_context(|| format!("Cannot read {}", path.display()))?
+                .take(MAX_FILE_BYTES + 1)
+                .read_to_end(&mut bytes)?;
             // Files may grow between traversal and read. Reject non-UTF8 and binaries.
             if bytes.len() as u64 > MAX_FILE_BYTES || bytes.contains(&0) {
-                return Ok(None);
+                anyhow::bail!(
+                    "Skipped {}: oversized or binary source",
+                    path.strip_prefix(root)?.display()
+                );
             }
             match String::from_utf8(bytes) {
                 Ok(content) => Ok(Some(Source {
@@ -155,7 +168,10 @@ pub fn load(root: &Path, globs: &[String], hidden: bool) -> Result<(Vec<Source>,
                         .to_owned(),
                     content,
                 })),
-                Err(_) => Ok(None),
+                Err(_) => anyhow::bail!(
+                    "Skipped {}: source is not UTF-8",
+                    path.strip_prefix(root)?.display()
+                ),
             }
         })
         .collect::<Vec<Result<Option<Source>>>>();

@@ -19,11 +19,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked
+      - run: cargo test --all-targets --locked
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: cargo build --release --locked
       - run: python3 scripts/check_optional.py --binary target/release/agx
+      - name: Validate normal Cargo installation and editor adapter
+        run: |
+          cargo install --path . --locked --root "$RUNNER_TEMP/agx-install"
+          cargo run --locked --example nain_adapter -- . bounded_response --agx "$RUNNER_TEMP/agx-install/bin/agx" --mode symbol
+      - name: Benchmark cold and warm editor search
+        run: python3 scripts/benchmark_worker.py --binary "$RUNNER_TEMP/agx-install/bin/agx" --files 1000 --out "target/editor-benchmark-${{ matrix.os }}.json"
       - uses: actions/upload-artifact@v4
         with:
           name: agx-${{ matrix.os }}
-          path: target/release/agx
+          path: |
+            target/release/agx
+            target/editor-benchmark-*.json

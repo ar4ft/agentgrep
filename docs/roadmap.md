@@ -16,13 +16,13 @@
 
 1. Run Mac CI, execute on real Apple Silicon/Intel machines, and test actual Codex/Claude harness sessions.
 2. Collect navigation tasks across Swift, TS, Rust, Python and document corpora. Evaluate recall@k, inspected-source bytes, time to verified evidence, and coding-task success against ripgrep and supplied tools. Include cold/warm states and failure cases.
-3. Add tokenizer adapters and a hard serialized response budget; retain explicit omission reasons and continuation paths.
+3. The editor worker now has a full serialized response cap and explicit omission reports; extend budgeting/continuation to standalone CLI and add tokenizer adapters.
 4. Preserve LiteParse JSON page/bounding-box provenance, extraction hashes, and citations through search results.
 
 ## Larger repositories
 
 - SQLite/FTS or compact postings index with transactional snapshots and query-time freshness checks.
-- Optional watcher/daemon and model lifetime management after measuring startup costs.
+- Restricted persistent editor worker and incremental cached BM25 are implemented. An internal watcher and inverted candidate postings remain future work; editor freshness currently depends on host events.
 - Approximate vector retrieval only when corpus size warrants it.
 - Finer syntax units, tree-sitter queries per language, and symbol navigation.
 - Type-aware call edges via language servers, with uncertainty annotations for dynamic dispatch; no unsupported impact certainty.

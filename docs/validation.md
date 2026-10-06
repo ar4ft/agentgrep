@@ -1,6 +1,6 @@
 # Validation · 2026-09-30
 
-Validated locally on Linux x86_64 using Rust 1.98.1 and a release build. The macOS CI matrix is configured but was not executed here. A real Claude Code or Codex agent task using the tool was not evaluated.
+The original v0.1 local checks below were recorded on Linux x86_64 using Rust 1.98.1. Later native CI/release checks are published in GitHub Actions; see the v0.3 editor validation section. A real Claude Code or Codex agent task using the tool was not evaluated.
 
 ## Passed
 
@@ -37,3 +37,11 @@ Local Linux checks passed: formatting, Clippy with warnings denied, 7 Rust unit 
 Signing tests mock Apple services; they verify hardened-runtime signing arguments, notarization rejection, ticket stapling, temporary-keychain cleanup, and manual-only publication policy. They do not prove Apple notarization. Mac CI additionally checks that real codesign rejects an unsigned executable. Actual Developer ID signing, Apple notarization, Gatekeeper acceptance, and a complete signed update require Apple credentials, which are not configured yet.
 
 Tag builds and ordinary CI remain unsigned. Signing requires a manual workflow run with `sign_and_notarize=true`; the publication script independently rejects signed requests from automatic events. Unsigned releases are development prereleases and cannot be installed by the automatic updater.
+
+## v0.3 editor worker validation
+
+Local Linux passed formatting, Clippy with warnings denied, 7 updater unit tests, 15 CLI/MCP integration tests, the Rust adapter executable-path test, and 26 Python tests (15 real editor-worker subprocess tests plus 11 signing/publication tests). Normal `cargo install --path . --locked` was validated using a separate installation prefix. The native Rust subprocess adapter negotiated, indexed, searched, and checked session/schema successfully.
+
+Worker regressions cover capability/unsupported-version negotiation, CLI schema compatibility, model/hybrid/unknown-operation rejection, a live local Ollama listener receiving zero calls and an executable trap remaining unused, overlays and monotonic versions, save/close/deletion behavior, index fences, incremental BM25 versus a fresh index, multi-root confinement and symlinks, nested ignore precedence and confined ignore rules, CRLF/Unicode ranges, match-line limits, file/memory/response limits, malformed/oversized frames, duplicate active IDs, and indexing/search cancellation with recovery. Warm queries retain cached content until an explicit disk event/rescan; this behavior is tested rather than mistaken for filesystem freshness.
+
+The [cold/warm benchmark](editor-benchmarks.md) includes raw local results and limitations. Native Apple Silicon and Intel CI runs the same tests, Cargo installation, adapter example and benchmark; platform reports are published as artifacts. The release matrix also repeats native tests/builds and publishes per-platform benchmark JSON with unsigned development archives. Actual nain GUI behavior, hostile concurrent filesystem mutation isolation, signed Apple publication, peak-memory studies and real-agent task quality remain unvalidated here. No nain source files were modified.

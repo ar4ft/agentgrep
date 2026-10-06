@@ -194,7 +194,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(other['results'][0]['path'],'secret.py')
             self.assertEqual(w.search('outside_token')['result']['matched_units'],0)
             self.assertEqual(w.search('anything',root_id='missing')['error']['code'],'unknown_root')
-            for path in ('../secret.py',str(Path(outside,'secret.py')),'link/secret.py'):
+            for path in ('../secret.py',str(Path(outside,'secret.py')),'link/secret.py','a//b.py','a/./b.py'):
                 r=w.call('document/update',{'root_id':'root','path':path,'version':1,'content':'outside_token'})
                 self.assertIn('error',r)
                 self.assertIn('error',w.call('workspace/files_changed',{'root_id':'root','paths':[path]}))

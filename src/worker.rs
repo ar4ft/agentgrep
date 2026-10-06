@@ -43,6 +43,21 @@ fn error(out: &Output, id: Value, code: &str, message: &str) -> Result<()> {
         json!({"protocol_version":1,"id":id,"error":{"code":code,"message":message}}),
     )
 }
+fn reserve_frame(bytes: &AtomicUsize, additional: usize) -> bool {
+    let mut current = bytes.load(Ordering::Relaxed);
+    loop {
+        let Some(next) = current
+            .checked_add(additional)
+            .filter(|n| *n <= QUEUE_BYTES)
+        else {
+            return false;
+        };
+        match bytes.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return true,
+            Err(actual) => current = actual,
+        }
+    }
+}
 fn check(cancel: &AtomicBool) -> Result<()> {
     anyhow::ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
     Ok(())
@@ -431,6 +446,9 @@ fn confined(root: &Path, relative: &str) -> Result<PathBuf> {
     let p = Path::new(relative);
     anyhow::ensure!(
         relative.len() <= 4096
+            && relative
+                .split('/')
+                .all(|p| !p.is_empty() && p != "." && p != "..")
             && !relative.is_empty()
             && !p.is_absolute()
             && p.components().all(|c| matches!(c, Component::Normal(_))),
@@ -1636,12 +1654,7 @@ pub fn serve() -> Result<()> {
                 }
                 active.insert(k.clone(), token.clone());
             }
-            if reader_bytes
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
-                    n.checked_add(frame_bytes).filter(|n| *n <= QUEUE_BYTES)
-                })
-                .is_err()
-            {
+            if !reserve_frame(&reader_bytes, frame_bytes) {
                 reader_active.lock().unwrap().remove(&k);
                 error(
                     &reader_out,

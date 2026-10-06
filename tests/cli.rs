@@ -387,8 +387,7 @@ fn symlink_outside_root_is_not_searched_or_read() {
     std::os::unix::fs::symlink(outside.path().join("secret"), root.path().join("link")).unwrap();
     let result = invoke(root.path(), &["search", "needle"]);
     assert_eq!(result["matched_units"], 0);
-    assert_eq!(result["incomplete"], true);
-    assert!(result["warnings"][0].as_str().unwrap().contains("2 MiB"));
+    assert_eq!(result["incomplete"], false);
     assert!(
         !command(root.path())
             .args(["read", "link"])
@@ -403,10 +402,10 @@ fn symlink_outside_root_is_not_searched_or_read() {
 fn large_files_are_skipped() {
     let root = tempfile::tempdir().unwrap();
     write(root.path(), "large.txt", &"needle".repeat(400000));
-    assert_eq!(
-        invoke(root.path(), &["search", "needle"])["matched_units"],
-        0
-    );
+    let result = invoke(root.path(), &["search", "needle"]);
+    assert_eq!(result["matched_units"], 0);
+    assert_eq!(result["incomplete"], true);
+    assert!(result["warnings"][0].as_str().unwrap().contains("2 MiB"));
 }
 
 #[test]

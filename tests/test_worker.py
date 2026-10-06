@@ -255,13 +255,17 @@ class WorkerTests(unittest.TestCase):
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 calls.append(self.path);self.send_response(500);self.end_headers()
+            do_GET=do_POST
             def log_message(self,*_args): pass
         server=ThreadingHTTPServer(('127.0.0.1',11434),Handler)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
         trap=self.root/'.trap';trap.mkdir()
-        executable=trap/'ollama';executable.write_text('#!/bin/sh\ntouch "$AGX_MODEL_TRAP"\nexit 1\n');executable.chmod(0o755)
+        executable=trap/'ollama';executable.write_text('#!/bin/sh\nprintf invoked > "$AGX_MODEL_TRAP"\nexit 1\n');executable.chmod(0o755)
         env={**os.environ,'PATH':str(trap),'AGX_MODEL_TRAP':str(self.root/'.model-called')}
+        subprocess.run([str(executable)],env=env,capture_output=True)
+        self.assertEqual((self.root/'.model-called').read_text(),'invoked')
+        (self.root/'.model-called').unlink()
         self.write('app.py','def needle():\n    return "needle"\n')
         w=self.worker(env=env);w.index()
         for mode in ('text','symbol','ranked'):

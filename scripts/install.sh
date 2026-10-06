@@ -83,7 +83,7 @@ Usage: install.sh [--version VERSION] [--stable] [--prefix ABSOLUTE_PATH] [--no-
 Install agx under ~/.agx (or AGX_INSTALL_DIR). AGX_VERSION selects a version.
 Default: newest published GitHub release, INCLUDING development prereleases.
 --stable: require a production release; fail if none exists.
---version: pin an existing version such as 0.3.2 or v0.3.2.
+--version: pin an existing version such as 0.3.3 or v0.3.3.
 No sudo, Rust, model downloads, automatic updates, or agent configuration changes.
 HELP
                 return 0;;
@@ -134,11 +134,20 @@ HELP
         if [ "$agx_version" = latest ]; then
             printf 'GitHub API unavailable; checking the public release feed.\n' >&2
             download https://github.com/ar4ft/agentgrep/releases.atom "$agx_tmp/releases.atom" || fail 'GitHub API and release feed are unavailable'
-            # GitHub emits one literal alternate-link line per public release.
-            # Release bodies are XML-escaped, and cannot supply matching links.
-            agx_feed_tag=$(sed -n 's@^[[:space:]]*<link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/\([^"]*\)"/>[[:space:]]*$@\1@p' "$agx_tmp/releases.atom" | awk 'NR==1 {print}')
-            [ -n "$agx_feed_tag" ] || fail 'no release found in the public feed'
-            agx_release=$agx_feed_tag'|unknown|false'
+            # The feed also includes bare tags. Probe native asset availability
+            # before selecting a version; release bodies are XML-escaped and
+            # cannot supply literal matching links. Bound candidate probes.
+            sed -n 's@^[[:space:]]*<link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/\([^"]*\)"/>[[:space:]]*$@\1@p' "$agx_tmp/releases.atom" | awk 'NR<=20 {print}' > "$agx_tmp/feed-tags"
+            agx_release=
+            while IFS= read -r agx_feed_tag; do
+                printf '%s\n' "$agx_feed_tag" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$' || continue
+                agx_probe=agx-${agx_feed_tag#v}-$agx_target
+                if download "https://github.com/ar4ft/agentgrep/releases/download/$agx_feed_tag/$agx_probe.sha256" "$agx_tmp/feed-checksum" 2> "$agx_tmp/feed-error"; then
+                    agx_release=$agx_feed_tag'|unknown|false'
+                    break
+                fi
+            done < "$agx_tmp/feed-tags"
+            [ -n "$agx_release" ] || fail 'no release with native assets found in the public feed'
         else
             # A caller-selected version needs no discovery. Its existence and
             # contents are still checked by the asset/hash/binary-version checks.

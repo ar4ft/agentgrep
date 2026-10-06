@@ -43,6 +43,9 @@ if urlparse(url).hostname == 'api.github.com' and (fixture / 'block-api').exists
     raise SystemExit(22)
 if '/releases/download/' in path:
     source = fixture / path.rsplit('/', 1)[1]
+    if not source.exists():
+        print('fixture HTTP 404', file=sys.stderr)
+        raise SystemExit(22)
 elif path.endswith('/releases.atom'):
     source = fixture / 'releases.atom'
 else:
@@ -174,6 +177,7 @@ Path(args[args.index('-o')+1]).write_bytes(source.read_bytes())
         (self.fixture / "block-api").touch()
         (self.fixture / "releases.atom").write_text(
             '<feed><entry>\n'
+            '  <link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/v999.0.0"/>\n'
             f'  <link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/v{self.version}"/>\n'
             '<content>&lt;link href="evil"/&gt;</content>\n</entry></feed>\n')
         result = self.run_installer("--no-modify-path")

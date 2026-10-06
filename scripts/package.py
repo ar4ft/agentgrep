@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", default="target/release/agx")
     parser.add_argument("--out", default="dist")
-    parser.add_argument("--version", default="0.3.1")
+    parser.add_argument("--version", default="0.3.2")
     parser.add_argument("--macos-signing-report", type=Path)
     parser.add_argument("--require-apple-signing", action="store_true")
     args = parser.parse_args()

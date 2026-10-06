@@ -38,8 +38,13 @@ assert args[args.index('--proto-redir')+1] == '=https'
 url = next(a for a in args if a.startswith('https://'))
 path = urlparse(url).path
 fixture = Path(os.environ['INSTALL_FIXTURE'])
+if urlparse(url).hostname == 'api.github.com' and (fixture / 'block-api').exists():
+    print('fixture HTTP 403', file=sys.stderr)
+    raise SystemExit(22)
 if '/releases/download/' in path:
     source = fixture / path.rsplit('/', 1)[1]
+elif path.endswith('/releases.atom'):
+    source = fixture / 'releases.atom'
 else:
     source = fixture / 'release.json'
 Path(args[args.index('-o')+1]).write_bytes(source.read_bytes())
@@ -164,6 +169,30 @@ Path(args[args.index('-o')+1]).write_bytes(source.read_bytes())
         result = self.run_installer(success=False)
         self.assertIn("another installer", result.stderr)
         self.assertTrue(lock.exists())
+
+    def test_blocked_api_uses_feed_for_latest_and_explicit_pin_but_stable_fails(self):
+        (self.fixture / "block-api").touch()
+        (self.fixture / "releases.atom").write_text(
+            '<feed><entry>\n'
+            f'  <link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/v{self.version}"/>\n'
+            '<content>&lt;link href="evil"/&gt;</content>\n</entry></feed>\n')
+        result = self.run_installer("--no-modify-path")
+        self.assertIn("public release feed", result.stderr)
+        self.assertIn("without API release classification", result.stderr)
+        self.run_installer("--version", self.version, "--no-modify-path")
+        (self.fixture / "releases.atom").unlink()
+        self.assertIn("refusing to weaken --stable", self.run_installer("--stable", success=False).stderr)
+        self.assertIn("GitHub API and release feed", self.run_installer(success=False).stderr)
+
+    def test_blocked_api_feed_rejects_escaped_body_links_and_unsafe_tags(self):
+        (self.fixture / "block-api").touch()
+        for feed in (
+            '<feed><entry><content>&lt;link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/v999.0.0"/&gt;</content></entry></feed>',
+            '<feed>\n<link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/../../escape"/>\n</feed>',
+        ):
+            (self.fixture / "releases.atom").write_text(feed)
+            self.run_installer(success=False)
+            self.assertFalse((self.home / ".agx/bin/agx").exists())
 
 
 if __name__ == "__main__":

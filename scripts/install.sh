@@ -83,7 +83,7 @@ Usage: install.sh [--version VERSION] [--stable] [--prefix ABSOLUTE_PATH] [--no-
 Install agx under ~/.agx (or AGX_INSTALL_DIR). AGX_VERSION selects a version.
 Default: newest published GitHub release, INCLUDING development prereleases.
 --stable: require a production release; fail if none exists.
---version: pin an existing version such as 0.3.1 or v0.3.1.
+--version: pin an existing version such as 0.3.2 or v0.3.2.
 No sudo, Rust, model downloads, automatic updates, or agent configuration changes.
 HELP
                 return 0;;
@@ -126,9 +126,25 @@ HELP
         if [ "$agx_channel" = stable ]; then agx_metadata_url=$agx_api/latest
         else agx_metadata_url=$agx_api'?per_page=20'; fi
     else agx_metadata_url=$agx_api/tags/v$agx_version; fi
-    download "$agx_metadata_url" "$agx_tmp/release.json" || fail 'could not fetch release metadata (missing release, API rate limit, or network error)'
-    releases "$agx_tmp/release.json" > "$agx_tmp/releases" || fail 'invalid GitHub release metadata'
-    agx_release=$(awk -F '|' '$3 == "false" && ($2 == "true" || $2 == "false") {print; exit}' "$agx_tmp/releases")
+    if download "$agx_metadata_url" "$agx_tmp/release.json"; then
+        releases "$agx_tmp/release.json" > "$agx_tmp/releases" || fail 'invalid GitHub release metadata'
+        agx_release=$(awk -F '|' '$3 == "false" && ($2 == "true" || $2 == "false") {print; exit}' "$agx_tmp/releases")
+    else
+        [ "$agx_channel" != stable ] || fail 'production release metadata is unavailable; refusing to weaken --stable'
+        if [ "$agx_version" = latest ]; then
+            printf 'GitHub API unavailable; checking the public release feed.\n' >&2
+            download https://github.com/ar4ft/agentgrep/releases.atom "$agx_tmp/releases.atom" || fail 'GitHub API and release feed are unavailable'
+            # GitHub emits one literal alternate-link line per public release.
+            # Release bodies are XML-escaped, and cannot supply matching links.
+            agx_feed_tag=$(sed -n 's@^[[:space:]]*<link rel="alternate" type="text/html" href="https://github.com/ar4ft/agentgrep/releases/tag/\([^"]*\)"/>[[:space:]]*$@\1@p' "$agx_tmp/releases.atom" | awk 'NR==1 {print}')
+            [ -n "$agx_feed_tag" ] || fail 'no release found in the public feed'
+            agx_release=$agx_feed_tag'|unknown|false'
+        else
+            # A caller-selected version needs no discovery. Its existence and
+            # contents are still checked by the asset/hash/binary-version checks.
+            agx_release=v$agx_version'|unknown|false'
+        fi
+    fi
     [ -n "$agx_release" ] || fail 'no published release found'
     agx_tag=${agx_release%%|*}
     printf '%s\n' "$agx_tag" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$' || fail 'invalid release tag in metadata'
@@ -137,6 +153,8 @@ HELP
         *'|true|false')
             [ "$agx_channel" != stable ] || fail 'requested release is a development prerelease'
             printf 'Installing development prerelease %s. Apple signing/notarization is not guaranteed.\n' "$agx_tag" >&2;;
+        *'|unknown|false')
+            printf 'Installing %s without API release classification. It may be an unsigned development build; Apple signing/notarization is not verified.\n' "$agx_tag" >&2;;
     esac
     agx_version=${agx_tag#v}
     agx_bundle=agx-$agx_version-$agx_target

@@ -24,11 +24,11 @@ to install updates. See [signing and updates](signing-and-updates.md).
 
 ## Pinning, reviewing, and custom paths
 
-For a reproducible install, use the script attached to an immutable release and
+To select a specific release, use its versioned script and
 pin the binary version too (a release's script otherwise still selects latest):
 
 ```sh
-curl -fsSL https://github.com/ar4ft/agentgrep/releases/download/v0.3.1/install.sh | sh -s -- --version 0.3.1
+curl -fsSL https://github.com/ar4ft/agentgrep/releases/download/v0.3.2/install.sh | sh -s -- --version 0.3.2
 ```
 
 Alternatively, download and inspect the script before executing it:
@@ -36,7 +36,7 @@ Alternatively, download and inspect the script before executing it:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ar4ft/agentgrep/main/scripts/install.sh -o install-agx.sh
 less install-agx.sh
-sh install-agx.sh --version 0.3.1 --prefix "$HOME/.agx" --no-modify-path
+sh install-agx.sh --version 0.3.2 --prefix "$HOME/.agx" --no-modify-path
 "$HOME/.agx/bin/agx" --version
 ```
 
@@ -47,10 +47,15 @@ newlines. Linux x86_64 with glibc is also supported; Windows, musl Linux, and Li
 ARM do not have release binaries and fail explicitly. On Apple Silicon, a shell
 running under Rosetta still selects the native ARM binary.
 
-The only download sources are GitHub's release metadata/assets over HTTPS.
+The only download sources are GitHub's release metadata, public Atom release feed,
+and release assets over HTTPS. If the API is blocked/unavailable, default discovery
+uses the public feed; an explicit version can directly select its release assets.
+In both cases the installer warns that prerelease/signing classification is unknown
+and retains all archive/hash/binary checks. `--stable` requires API classification
+and fails if it is unavailable; the feed cannot prove a release is production.
 `curl`, `tar`, `awk`, `fold`, `sed`, `mktemp`, and either `shasum` or `sha256sum`
-are required (available on a standard Mac). Network failures, GitHub's unauthenticated
-API rate limit, unavailable assets, hash mismatches, unsafe archive entries,
+are required (available on a standard Mac). Network failures, unavailable metadata
+and feed, unavailable assets, hash mismatches, unsafe archive entries,
 unmanaged destination binaries, and unsupported systems fail with a nonzero exit
 code and a diagnostic. No token or GitHub CLI is required.
 

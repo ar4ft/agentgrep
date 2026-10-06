@@ -123,6 +123,9 @@ jobs:
           curl -fsSL "https://github.com/ar4ft/agentgrep/releases/download/$RELEASE_TAG/install.sh" |
             sh -s -- --version "${RELEASE_TAG#v}" --prefix "$RUNNER_TEMP/agx-download" --no-modify-path
           test "$("$RUNNER_TEMP/agx-download/bin/agx" --version)" = "agx ${RELEASE_TAG#v}"
+          curl -fsSL "https://github.com/ar4ft/agentgrep/releases/download/$RELEASE_TAG/install.sh" |
+            sh -s -- --prefix "$RUNNER_TEMP/agx-latest-download" --no-modify-path
+          "$RUNNER_TEMP/agx-latest-download/bin/agx" --version
           mkdir "$RUNNER_TEMP/agx-installer-project"
           printf 'fn installer_probe() { println!("ready"); }\n' > "$RUNNER_TEMP/agx-installer-project/probe.rs"
           for mode in text symbol ranked; do

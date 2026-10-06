@@ -1,5 +1,5 @@
 {
   "name": "agentgrep",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Local source evidence with the agx CLI and a skill for exact, structural, ranked, and hybrid search. Install the CLI separately."
 }

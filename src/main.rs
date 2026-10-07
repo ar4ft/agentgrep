@@ -128,6 +128,12 @@ enum Commands {
         #[command(subcommand)]
         action: update::Action,
     },
+    /// Explicitly update to the newest unsigned development prerelease (GitHub SHA-256 only).
+    UpdatePre {
+        /// Report the newest available development archive without installing it.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 fn install_skill(harness: Harness, global: bool, root: PathBuf, force: bool) -> Result<()> {
@@ -309,6 +315,7 @@ fn run() -> Result<()> {
             println!("{}", serde_json::json!({"removed":path}));
         }
         Commands::Update { action } => println!("{}", update::run(action)?),
+        Commands::UpdatePre { check } => println!("{}", update::development(check)?),
     }
     std::io::stdout().flush()?;
     Ok(())

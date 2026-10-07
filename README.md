@@ -29,6 +29,21 @@ agx update rollback
 
 See the [signing and updater guide](docs/signing-and-updates.md) for trust pins, source builds, channels, Command Line Tools, writable installation paths, and rollback behavior. Search and MCP do not check for updates.
 
+For unsigned development releases, use the explicit development updater:
+
+```sh
+agx update-pre --check   # discover a development archive, without installing
+agx update-pre           # install only if newer; verify SHA-256 and retain rollback
+agx update rollback      # restore the exact binary from the last successful update
+```
+
+This works on Apple Silicon/Intel Mac and Linux x86_64. It updates the running
+`agx` executable's installation path, including `~/.agx/bin/agx`, without sudo or
+background updates. It trusts GitHub HTTPS/checksums and does not verify Apple
+signatures/notarization. `agx update install --prerelease` still requires a signed
+DMG; automatic updates remain signed-only. Versions before 0.3.4 need the installer
+below once to gain `update-pre`.
+
 ## Install on Mac
 
 Install the prebuilt `agx` into `~/.agx/bin` without Rust or sudo:

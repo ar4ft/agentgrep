@@ -17,7 +17,12 @@ curl -fsSL https://raw.githubusercontent.com/ar4ft/agentgrep/main/scripts/instal
 
 `--stable` fails if there is no production release. It also rejects an explicitly
 pinned development prerelease. The installer does not enable automatic updates.
-Rerunning it explicitly upgrades/reinstalls a development build. The existing
+Rerunning it explicitly upgrades/reinstalls a development build. Starting with
+0.3.4, `agx update-pre --check` discovers development updates and `agx update-pre`
+installs a newer unsigned archive at the current executable path, retaining
+rollback for `agx update rollback`. This updates only the binary, not documentation,
+installer receipts or installed skills. Bootstrap older versions with the installer
+once to acquire the command. The existing
 `agx update install` and opt-in launchd updater retain their stronger Developer ID,
 Team ID, notarization and DMG checks; unsigned development builds cannot use them
 to install updates. See [signing and updates](signing-and-updates.md).
@@ -28,7 +33,7 @@ To select a specific release, use its versioned script and
 pin the binary version too (a release's script otherwise still selects latest):
 
 ```sh
-curl -fsSL https://github.com/ar4ft/agentgrep/releases/download/v0.3.3/install.sh | sh -s -- --version 0.3.3
+curl -fsSL https://github.com/ar4ft/agentgrep/releases/download/v0.3.4/install.sh | sh -s -- --version 0.3.4
 ```
 
 Alternatively, download and inspect the script before executing it:
@@ -36,7 +41,7 @@ Alternatively, download and inspect the script before executing it:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ar4ft/agentgrep/main/scripts/install.sh -o install-agx.sh
 less install-agx.sh
-sh install-agx.sh --version 0.3.3 --prefix "$HOME/.agx" --no-modify-path
+sh install-agx.sh --version 0.3.4 --prefix "$HOME/.agx" --no-modify-path
 "$HOME/.agx/bin/agx" --version
 ```
 

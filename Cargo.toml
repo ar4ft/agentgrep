@@ -1,6 +1,6 @@
 [package]
 name = "agentgrep"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 license = "MIT"
 description = "Local source evidence for coding agents"
@@ -17,6 +17,8 @@ clap = { version = "4", features = ["derive"] }
 directories = "6"
 globset = "0.4"
 fs2 = "0.4"
+flate2 = "1"
+tar = "0.4"
 ignore = "0.4"
 rayon = "1"
 regex = "1"

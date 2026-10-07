@@ -14,6 +14,29 @@ fn command(root: &Path) -> Command {
 }
 
 #[test]
+fn development_update_is_an_explicit_cli_command_and_never_an_auto_option() {
+    let root = tempfile::tempdir().unwrap();
+    let help = command(root.path())
+        .args(["update-pre", "--help"])
+        .output()
+        .unwrap();
+    assert!(help.status.success());
+    let text = String::from_utf8(help.stdout).unwrap();
+    assert!(text.contains("unsigned development") && text.contains("--check"));
+    let auto = command(root.path())
+        .args(["update", "auto", "enable", "--unsigned"])
+        .output()
+        .unwrap();
+    assert_eq!(auto.status.code(), Some(2));
+    assert!(auto.stdout.is_empty());
+    let unsupported = command(root.path())
+        .args(["update-pre", "--team-id", "ABCDE12345"])
+        .output()
+        .unwrap();
+    assert_eq!(unsupported.status.code(), Some(2));
+}
+
+#[test]
 fn automatic_update_dry_run_renders_schedule_without_writing_configuration() {
     let root = tempfile::tempdir().unwrap();
     let team = option_env!("AGX_APPLE_TEAM_ID")

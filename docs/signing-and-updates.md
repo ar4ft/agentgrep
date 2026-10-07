@@ -1,6 +1,56 @@
-# Signed releases and automatic updates
+# Signed releases, development updates, and automatic updates
 
-The v0.2 development branch includes Developer ID signing, Apple notarization, stapled disk images, verified updates, rollback, and an opt-in macOS LaunchAgent. The published v0.1.0 release remains unsigned. **Apple credentials are not set up yet, so a signed v0.2.1 release has not been published.**
+Developer ID signing, Apple notarization, stapled disk images, verified updates,
+rollback, and an opt-in macOS LaunchAgent are implemented. **Apple credentials are
+not configured yet; current releases remain unsigned development prereleases.**
+
+## Update unsigned development releases
+
+Starting with 0.3.4:
+
+```sh
+agx update-pre --check
+agx update-pre
+agx update rollback
+```
+
+`update-pre` is an explicit manual update command for Apple Silicon/Intel Mac and
+Linux x86_64. It selects the highest semantic version among the first 100 GitHub
+releases marked prerelease, excluding drafts, invalid versions, releases with DMGs
+(signed releases/betas), and releases without the current architecture's archive.
+Stable-looking tags such as `v0.3.4` are eligible when GitHub marks them development
+prereleases. It never reinstalls the same version or downgrades. `--check` reports
+availability without downloading an archive or modifying updater state.
+
+Downloads use the exact repository/tag/archive URL over verified HTTPS, require
+GitHub's SHA-256 digest and exact size, and are limited to 64 MiB. Archive processing
+is bounded to 256 MiB expanded and 2,048 entries. Links, special files, traversal,
+foreign roots, duplicate/missing binaries, oversized entries, and executable
+version/platform failures are rejected before replacement. The command does not
+execute a downloaded installer script or unpack archive paths into the installation
+directory. It stages only `agx`, verifies its version, and shares the signed
+updater's lock, atomic replacement and hash-checked rollback state. It updates the
+actual executable resolved from `current_exe`, including Cargo/custom paths; it
+does not redirect to another PATH copy. Writable user-owned directories are required;
+sudo is never invoked.
+
+Output is JSON on stdout; failures are JSON on stderr with exit code 2. Results
+include channel `unsigned-development`, current/latest versions, `update_available`,
+`installed`, target, release URL, verification `github-sha256`, and a warning.
+Successful replacement also reports previous version, executable path and rollback
+availability. No eligible release returns `no_release_in_selected_channel`;
+no newer version returns `up_to_date`. These are successful no-op outcomes.
+
+This trusts GitHub HTTPS/digest metadata. **It does not verify Apple publisher
+identity/signatures/notarization.** Unsigned updates are never scheduled by
+`agx update auto`. Signed installation/automatic updates retain every Apple/DMG
+check, even with `--prerelease`. No Apple Team ID is needed for `update-pre`;
+explicit use on a signed build opts into a development binary. Only the binary is
+updated, not installer receipts, documentation or installed skills. Restart editor
+workers to use the new executable. Older versions need the [installer](installation.md)
+once to acquire this command. Discovery requires GitHub's API; unavailability/rate
+limits fail before replacement. The separate bootstrap installer supports public
+feed discovery as documented.
 
 ## One-time Apple setup
 
@@ -88,7 +138,7 @@ Source builds lack a publisher trust pin unless compiled with `AGX_APPLE_TEAM_ID
 agx update auto enable --interval-hours 24 --team-id YOURTEAMID --dry-run
 ```
 
-Replace `YOURTEAMID` with the real 10-character Team ID. Dry-run renders the LaunchAgent without creating/loading it; it is available on Linux to review the Mac schedule. Linux supports release checks but currently requires manual source/package updates for installation.
+Replace `YOURTEAMID` with the real 10-character Team ID. Dry-run renders the LaunchAgent without creating/loading it; it is available on Linux to review the Mac schedule. Linux supports release checks and manual `update-pre` installation/rollback; signed DMG installation and launchd scheduling remain Mac-only.
 
 ## Verification and replacement
 
@@ -96,7 +146,7 @@ Only update commands contact GitHub. Search and MCP do not check for updates or 
 
 The updater selects a matching architecture's exact repository DMG URL, requires GitHub's SHA-256 asset digest, limits downloads to 64 MiB over verified HTTPS, and checks the received size/hash. It verifies the DMG's Apple chain, Developer ID certificate, app identifier, and pinned Team ID, validates the stapled ticket, and asks Gatekeeper to assess it. It mounts read-only, accepts only the root regular `agx` file, then verifies the **staged copy** of that executable and its reported version before atomically replacing the installed path.
 
-GitHub's digest detects corruption but is not the publisher trust root; Apple's verified certificate chain, app identifier, pinned Team ID, and notarization checks provide that trust. The updater has no unsigned or checksum-only fallback.
+GitHub's digest detects corruption but is not the publisher trust root; Apple's verified certificate chain, app identifier, pinned Team ID, and notarization checks provide that trust. The signed updater has no unsigned or checksum-only fallback. Only the separate, explicitly invoked `update-pre` command accepts development tar archives.
 
 Per-executable locks prevent concurrent updates/rollback. The old executable is retained beside the installed path under a private generated filename, with hashes and versions recorded in the user-local update state directory. If the current executable or backup changes unexpectedly, rollback refuses to overwrite it. Only the most recent update is retained. Disable automatic updates before rolling back if you want to keep the older version.
 

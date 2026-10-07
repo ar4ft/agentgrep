@@ -83,7 +83,7 @@ Usage: install.sh [--version VERSION] [--stable] [--prefix ABSOLUTE_PATH] [--no-
 Install agx under ~/.agx (or AGX_INSTALL_DIR). AGX_VERSION selects a version.
 Default: newest published GitHub release, INCLUDING development prereleases.
 --stable: require a production release; fail if none exists.
---version: pin an existing version such as 0.3.3 or v0.3.3.
+--version: pin an existing version such as 0.3.4 or v0.3.4.
 No sudo, Rust, model downloads, automatic updates, or agent configuration changes.
 HELP
                 return 0;;

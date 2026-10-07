@@ -18,6 +18,7 @@ const LABEL: &str = "dev.agentgrep.updater";
 const BINARY_ID: &str = "dev.agentgrep.agx";
 const IMAGE_ID: &str = "dev.agentgrep.agx.diskimage";
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_EXPANDED_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Subcommand)]
 pub enum Action {
@@ -138,7 +139,7 @@ fn client() -> ureq::Agent {
         .into()
 }
 
-fn latest(prerelease: bool) -> Result<Option<(Release, Version)>> {
+fn releases() -> Result<Vec<Release>> {
     let url = format!("https://api.github.com/repos/{REPOSITORY}/releases?per_page=100");
     let releases: Vec<Release> = client()
         .get(&url)
@@ -149,7 +150,225 @@ fn latest(prerelease: bool) -> Result<Option<(Release, Version)>> {
         .context("Could not check GitHub releases")?
         .body_mut()
         .read_json()?;
-    Ok(select_release(releases, prerelease))
+    Ok(releases)
+}
+
+fn latest(prerelease: bool) -> Result<Option<(Release, Version)>> {
+    Ok(select_release(releases()?, prerelease))
+}
+
+fn select_development_release(
+    releases: Vec<Release>,
+    platform: &str,
+) -> Option<(Release, Version)> {
+    releases
+        .into_iter()
+        .filter_map(|r| {
+            if r.draft || !r.prerelease || r.assets.iter().any(|a| a.name.ends_with(".dmg")) {
+                return None;
+            }
+            let version = release_version(&r)?;
+            let name = format!("agx-{version}-{platform}.tar.gz");
+            r.assets
+                .iter()
+                .any(|a| a.name == name)
+                .then_some((r, version))
+        })
+        .max_by(|a, b| a.1.cmp(&b.1))
+}
+
+fn archive_asset<'a>(release: &'a Release, version: &Version, platform: &str) -> Result<&'a Asset> {
+    let name = format!("agx-{version}-{platform}.tar.gz");
+    let mut assets = release.assets.iter().filter(|a| a.name == name);
+    let asset = assets
+        .next()
+        .context("Development release has no archive for this architecture")?;
+    anyhow::ensure!(
+        assets.next().is_none(),
+        "Duplicate development archive assets"
+    );
+    anyhow::ensure!(
+        asset.browser_download_url
+            == format!(
+                "https://github.com/{REPOSITORY}/releases/download/{}/{name}",
+                release.tag_name
+            ),
+        "Unexpected development archive URL"
+    );
+    anyhow::ensure!(
+        asset.size > 0 && asset.size <= MAX_IMAGE_BYTES,
+        "Development archive is empty or exceeds 64 MiB"
+    );
+    expected_digest(asset)?;
+    Ok(asset)
+}
+
+fn download(asset: &Asset, destination: &Path) -> Result<()> {
+    let mut output = File::create(destination)?;
+    let mut response = client()
+        .get(&asset.browser_download_url)
+        .header("User-Agent", "agentgrep-updater")
+        .call()
+        .context("Release download failed")?;
+    let count = std::io::copy(
+        &mut response.body_mut().as_reader().take(MAX_IMAGE_BYTES + 1),
+        &mut output,
+    )?;
+    output.sync_all()?;
+    anyhow::ensure!(
+        count == asset.size && count <= MAX_IMAGE_BYTES,
+        "Release download size mismatch"
+    );
+    verify_download(asset, destination)
+}
+
+fn verify_download(asset: &Asset, destination: &Path) -> Result<()> {
+    anyhow::ensure!(
+        fs::metadata(destination)?.len() == asset.size && asset.size <= MAX_IMAGE_BYTES,
+        "Release download size mismatch"
+    );
+    anyhow::ensure!(
+        sha256(destination)? == expected_digest(asset)?,
+        "Release download checksum mismatch; executable unchanged"
+    );
+    Ok(())
+}
+
+fn extract_development(
+    archive: &Path,
+    candidate: &Path,
+    version: &Version,
+    platform: &str,
+) -> Result<()> {
+    let root = format!("agx-{version}-{platform}");
+    let binary_path = format!("{root}/agx");
+    let decoder = flate2::read::GzDecoder::new(File::open(archive)?).take(MAX_EXPANDED_BYTES + 1);
+    let mut tar = tar::Archive::new(decoder);
+    let mut found = false;
+    let mut expanded = 0u64;
+    for (count, entry) in tar.entries()?.enumerate() {
+        anyhow::ensure!(count < 2048, "Development archive exceeds 2048 entries");
+        let mut entry = entry?;
+        let raw = entry.path_bytes();
+        anyhow::ensure!(
+            raw.len() <= 4096,
+            "Development archive path exceeds 4096 bytes"
+        );
+        let path = std::str::from_utf8(&raw).context("Archive path must be UTF-8")?;
+        let trimmed = path.strip_suffix('/').unwrap_or(path);
+        let mut parts = trimmed.split('/');
+        anyhow::ensure!(
+            parts.next() == Some(root.as_str())
+                && parts.all(|p| !p.is_empty() && p != "." && p != ".."),
+            "Unsafe development archive path"
+        );
+        let kind = entry.header().entry_type();
+        anyhow::ensure!(
+            kind.is_file() || kind.is_dir(),
+            "Development archive contains links or special files"
+        );
+        expanded = expanded
+            .checked_add(entry.size())
+            .context("Archive size overflow")?;
+        anyhow::ensure!(
+            expanded <= MAX_EXPANDED_BYTES && entry.size() <= MAX_IMAGE_BYTES,
+            "Development archive exceeds expanded size limits"
+        );
+        if path == binary_path {
+            anyhow::ensure!(
+                kind.is_file() && !found,
+                "Archive must contain exactly one regular agx executable"
+            );
+            found = true;
+            let mut output = File::create(candidate)?;
+            std::io::copy(&mut entry, &mut output)?;
+            output.sync_all()?;
+        }
+    }
+    anyhow::ensure!(found, "Development archive has no agx executable");
+    Ok(())
+}
+
+fn install_development_archive(
+    destination: &Path,
+    archive: &Path,
+    state_dir: &Path,
+    current: Version,
+    version: Version,
+    platform: &str,
+) -> Result<Installed> {
+    anyhow::ensure!(
+        version > current,
+        "Development updates cannot reinstall or downgrade"
+    );
+    let work = tempfile::tempdir()?;
+    let candidate = work.path().join("agx");
+    extract_development(archive, &candidate, &version, platform)?;
+    replace_binary(
+        destination,
+        &candidate,
+        state_dir,
+        current,
+        version.clone(),
+        |staged| {
+            anyhow::ensure!(
+                executable_version(staged)? == version,
+                "Development executable version does not match release tag"
+            );
+            Ok(())
+        },
+    )
+}
+
+pub fn development(check_only: bool) -> Result<Value> {
+    let platform = target();
+    anyhow::ensure!(
+        matches!(
+            platform.as_str(),
+            "aarch64-apple-darwin" | "x86_64-apple-darwin" | "x86_64-unknown-linux-gnu"
+        ),
+        "Development updates support Apple Silicon/Intel Mac and Linux x86_64 only"
+    );
+    let destination = std::env::current_exe()?.canonicalize()?;
+    let current = executable_version(&destination)?;
+    let warning = "Explicit development update: GitHub HTTPS/SHA-256 only; no Apple signature or notarization verification";
+    let Some((release, version)) = select_development_release(releases()?, &platform) else {
+        return Ok(
+            json!({"channel":"unsigned-development","installed":false,"update_available":false,"status":"no_release_in_selected_channel","current_version":current,"warning":warning}),
+        );
+    };
+    let asset = archive_asset(&release, &version, &platform)?;
+    let mut result = json!({"channel":"unsigned-development","current_version":current,"latest_version":version,"target":platform,"update_available":version>current,"installed":false,"verification":"github-sha256","warning":warning,"release":format!("https://github.com/{REPOSITORY}/releases/tag/{}",release.tag_name)});
+    if check_only {
+        return Ok(result);
+    }
+    let state_dir = data_dir()?;
+    let _lock = lock(&destination, &state_dir)?;
+    // Re-read under the updater lock so another update cannot make us downgrade.
+    let current = executable_version(&destination)?;
+    result["current_version"] = json!(current);
+    result["update_available"] = json!(version > current);
+    if version <= current {
+        result["status"] = json!("up_to_date");
+        return Ok(result);
+    }
+    eprintln!("warning: {warning}");
+    let work = tempfile::tempdir()?;
+    let archive = work.path().join("update.tar.gz");
+    download(asset, &archive)?;
+    let state = install_development_archive(
+        &destination,
+        &archive,
+        &state_dir,
+        current,
+        version,
+        &platform,
+    )?;
+    result["installed"] = json!(true);
+    result["previous_version"] = json!(state.previous_version);
+    result["executable"] = json!(destination);
+    result["rollback_available"] = json!(true);
+    Ok(result)
 }
 
 fn image_asset<'a>(release: &'a Release, version: &Version, platform: &str) -> Result<&'a Asset> {
@@ -351,11 +570,13 @@ fn replace_binary(
         fs::symlink_metadata(destination)?.file_type().is_file(),
         "Executable target must be a regular file"
     );
-    let staged = staged_copy(candidate, destination)?;
-    verify(staged.path())?; // Verify the exact copy to be installed, before changing anything.
+    // Close the writable descriptor before executing the staged version check
+    // (Linux refuses to execute a file that is still open for writing).
+    let staged = staged_copy(candidate, destination)?.into_temp_path();
+    verify(&staged)?; // Verify the exact copy to be installed, before changing anything.
     let backup_temp = staged_copy(destination, destination)?;
     let backup_sha256 = sha256(backup_temp.path())?;
-    let installed_sha256 = sha256(staged.path())?;
+    let installed_sha256 = sha256(&staged)?;
     let (old_file, backup) = backup_temp.keep().map_err(|e| e.error)?;
     drop(old_file);
     let state = Installed {
@@ -686,13 +907,7 @@ pub fn run(action: Action) -> Result<Value> {
             prerelease,
             team_id,
         } => install(prerelease, team_id.as_deref()),
-        Action::Rollback => {
-            anyhow::ensure!(
-                cfg!(target_os = "macos"),
-                "Verified updater rollback supports macOS only"
-            );
-            rollback_at(&std::env::current_exe()?.canonicalize()?, &data_dir()?)
-        }
+        Action::Rollback => rollback_at(&std::env::current_exe()?.canonicalize()?, &data_dir()?),
         Action::Auto { action } => auto(action),
     }
 }
@@ -852,6 +1067,266 @@ mod tests {
         drop(first);
         assert!(lock(&destination, &state).is_ok());
     }
+
+    fn archive_release(tag: &str, pre: bool, draft: bool, platform: &str) -> Release {
+        let mut result = release(tag, pre, draft);
+        let version = tag.trim_start_matches('v');
+        let name = format!("agx-{version}-{platform}.tar.gz");
+        result.assets.push(Asset {
+            browser_download_url: format!(
+                "https://github.com/{REPOSITORY}/releases/download/{tag}/{name}"
+            ),
+            name,
+            size: 100,
+            digest: Some(format!("sha256:{}", "a".repeat(64))),
+        });
+        result
+    }
+
+    #[test]
+    fn development_selection_uses_prerelease_flag_architecture_and_semver_not_signed_images() {
+        let platform = "aarch64-apple-darwin";
+        let mut signed = archive_release("v20.0.0-beta.1", true, false, platform);
+        signed.assets.push(Asset {
+            name: "agx.dmg".into(),
+            browser_download_url: "unused".into(),
+            size: 1,
+            digest: None,
+        });
+        let candidates = vec![
+            archive_release("v0.9.0", true, false, platform),
+            archive_release("v0.10.0", true, false, platform),
+            archive_release("v50.0.0", false, false, platform),
+            archive_release("v60.0.0", true, true, platform),
+            archive_release("v70.0.0", true, false, "x86_64-apple-darwin"),
+            release("v80.0.0", true, false),
+            signed,
+            archive_release("invalid", true, false, platform),
+        ];
+        assert_eq!(
+            select_development_release(candidates, platform).unwrap().1,
+            Version::new(0, 10, 0)
+        );
+        assert!(
+            select_development_release(vec![release("v9.0.0", false, false)], platform).is_none()
+        );
+        let unsigned = archive_release("v0.10.0", true, false, platform);
+        assert!(image_asset(&unsigned, &Version::new(0, 10, 0), platform).is_err());
+    }
+
+    #[test]
+    fn development_assets_and_downloads_require_exact_urls_size_and_digest() {
+        let platform = "aarch64-apple-darwin";
+        let version = Version::new(9, 0, 0);
+        let mut r = archive_release("v9.0.0", true, false, platform);
+        assert!(archive_asset(&r, &version, platform).is_ok());
+        let good = r.assets[0].clone();
+        r.assets[0].browser_download_url = "https://evil.test/archive".into();
+        assert!(archive_asset(&r, &version, platform).is_err());
+        r.assets[0] = good.clone();
+        r.assets[0].size = MAX_IMAGE_BYTES + 1;
+        assert!(archive_asset(&r, &version, platform).is_err());
+        r.assets[0] = good.clone();
+        r.assets[0].digest = None;
+        assert!(archive_asset(&r, &version, platform).is_err());
+        r.assets = vec![good.clone(), good.clone()];
+        assert!(archive_asset(&r, &version, platform).is_err());
+        let dir = tempfile::tempdir().unwrap();
+        let downloaded = dir.path().join("archive");
+        fs::write(&downloaded, b"fixture").unwrap();
+        let mut asset = good;
+        asset.size = 7;
+        asset.digest = Some(format!("sha256:{}", sha256(&downloaded).unwrap()));
+        verify_download(&asset, &downloaded).unwrap();
+        fs::write(&downloaded, b"changed").unwrap();
+        assert!(verify_download(&asset, &downloaded).is_err());
+        fs::write(&downloaded, b"short").unwrap();
+        assert!(verify_download(&asset, &downloaded).is_err());
+    }
+
+    fn fixture_archive(path: &Path, entries: &[(&str, tar::EntryType, &[u8])]) {
+        let gzip =
+            flate2::write::GzEncoder::new(File::create(path).unwrap(), flate2::Compression::fast());
+        let mut builder = tar::Builder::new(gzip);
+        for (name, kind, bytes) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_mode(0o755);
+            header.set_size(bytes.len() as u64);
+            header.set_entry_type(*kind);
+            // Raw headers allow constructing hostile paths rejected by Builder::append_data.
+            header.as_mut_bytes()[..name.len()].copy_from_slice(name.as_bytes());
+            header.set_cksum();
+            builder.append(&header, *bytes).unwrap();
+        }
+        builder.into_inner().unwrap().finish().unwrap();
+    }
+
+    #[test]
+    fn development_archive_rejects_traversal_links_duplicates_and_missing_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let archive = dir.path().join("archive");
+        let candidate = dir.path().join("candidate");
+        let platform = "x86_64-apple-darwin";
+        let version = Version::new(9, 0, 0);
+        let normal = "agx-9.0.0-x86_64-apple-darwin/agx";
+        for bad in [
+            "../agx",
+            "/agx",
+            "agx-9.0.0-x86_64-apple-darwin/../agx",
+            "wrong/agx",
+        ] {
+            fixture_archive(&archive, &[(bad, tar::EntryType::Regular, b"bad")]);
+            assert!(extract_development(&archive, &candidate, &version, platform).is_err());
+        }
+        for kind in [
+            tar::EntryType::Symlink,
+            tar::EntryType::Link,
+            tar::EntryType::Fifo,
+        ] {
+            fixture_archive(&archive, &[(normal, kind, b"")]);
+            assert!(extract_development(&archive, &candidate, &version, platform).is_err());
+        }
+        fixture_archive(
+            &archive,
+            &[
+                (normal, tar::EntryType::Regular, b"one"),
+                (normal, tar::EntryType::Regular, b"two"),
+            ],
+        );
+        assert!(extract_development(&archive, &candidate, &version, platform).is_err());
+        fixture_archive(
+            &archive,
+            &[(
+                "agx-9.0.0-x86_64-apple-darwin/README",
+                tar::EntryType::Regular,
+                b"doc",
+            )],
+        );
+        assert!(extract_development(&archive, &candidate, &version, platform).is_err());
+        let entries = vec![
+            (
+                "agx-9.0.0-x86_64-apple-darwin/doc",
+                tar::EntryType::Regular,
+                &b""[..]
+            );
+            2049
+        ];
+        fixture_archive(&archive, &entries);
+        assert!(extract_development(&archive, &candidate, &version, platform).is_err());
+        let mut gzip = flate2::write::GzEncoder::new(
+            File::create(&archive).unwrap(),
+            flate2::Compression::fast(),
+        );
+        let mut header = tar::Header::new_gnu();
+        header.set_path(normal).unwrap();
+        header.set_mode(0o755);
+        header.set_size(MAX_IMAGE_BYTES + 1);
+        header.set_cksum();
+        gzip.write_all(header.as_bytes()).unwrap();
+        gzip.finish().unwrap();
+        assert!(
+            extract_development(&archive, &candidate, &version, platform)
+                .unwrap_err()
+                .to_string()
+                .contains("size limits")
+        );
+    }
+
+    #[test]
+    fn development_archive_accepts_pax_metadata_used_by_native_release_packages() {
+        let dir = tempfile::tempdir().unwrap();
+        let archive = dir.path().join("archive");
+        let candidate = dir.path().join("candidate");
+        let platform = target();
+        let gzip = flate2::write::GzEncoder::new(
+            File::create(&archive).unwrap(),
+            flate2::Compression::fast(),
+        );
+        let mut builder = tar::Builder::new(gzip);
+        builder
+            .append_pax_extensions([("mtime", &b"1.5"[..])])
+            .unwrap();
+        let mut header = tar::Header::new_gnu();
+        header.set_size(6);
+        header.set_mode(0o755);
+        builder
+            .append_data(
+                &mut header,
+                format!("agx-9.0.0-{platform}/agx"),
+                &b"source"[..],
+            )
+            .unwrap();
+        builder.into_inner().unwrap().finish().unwrap();
+        extract_development(&archive, &candidate, &Version::new(9, 0, 0), &platform).unwrap();
+        assert_eq!(fs::read(candidate).unwrap(), b"source");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn development_install_replaces_exact_executable_and_rolls_back_without_apple_tools() {
+        let dir = tempfile::tempdir().unwrap();
+        let destination = dir.path().join("agx");
+        fs::write(&destination, b"original bytes").unwrap();
+        let archive = dir.path().join("archive");
+        let state_dir = dir.path().join("state");
+        private_dir(&state_dir).unwrap();
+        let platform = target();
+        let name = format!("agx-9.0.0-{platform}/agx");
+        fixture_archive(
+            &archive,
+            &[(
+                &name,
+                tar::EntryType::Regular,
+                b"#!/bin/sh\nprintf 'agx 8.0.0\\n'\n",
+            )],
+        );
+        assert!(
+            install_development_archive(
+                &destination,
+                &archive,
+                &state_dir,
+                Version::new(1, 0, 0),
+                Version::new(9, 0, 0),
+                &platform
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(&destination).unwrap(), b"original bytes");
+        assert_eq!(fs::read_dir(&state_dir).unwrap().count(), 0);
+        let binary = b"#!/bin/sh\nprintf 'agx 9.0.0\\n'\n";
+        fixture_archive(&archive, &[(&name, tar::EntryType::Regular, binary)]);
+        for current in [Version::new(9, 0, 0), Version::new(10, 0, 0)] {
+            assert!(
+                install_development_archive(
+                    &destination,
+                    &archive,
+                    &state_dir,
+                    current,
+                    Version::new(9, 0, 0),
+                    &platform
+                )
+                .is_err()
+            );
+            assert_eq!(fs::read(&destination).unwrap(), b"original bytes");
+        }
+        install_development_archive(
+            &destination,
+            &archive,
+            &state_dir,
+            Version::new(1, 0, 0),
+            Version::new(9, 0, 0),
+            &platform,
+        )
+        .unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), binary);
+        assert_eq!(
+            executable_version(&destination).unwrap(),
+            Version::new(9, 0, 0)
+        );
+        rollback_at(&destination, &state_dir).unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), b"original bytes");
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn real_codesign_rejects_an_unsigned_test_executable() {
